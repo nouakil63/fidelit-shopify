@@ -105,6 +105,11 @@
         return;
       }
 
+      // Liquid keeps the widget hidden until the signed app proxy confirms
+      // that the loyalty program is active. This prevents the launcher from
+      // flashing briefly and disappearing on inactive shops.
+      root.hidden = false;
+
       root.querySelector("[data-loyalty-title]").textContent = config.popupTitle;
       root.querySelector("[data-loyalty-text]").textContent = config.popupText;
       root.querySelector("[data-loyalty-account]").textContent = config.popupButtonLabel;

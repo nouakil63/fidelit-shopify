@@ -47,6 +47,7 @@ enum RewardKind {
 
 enum RewardStatus {
   PENDING
+  PROCESSING
   ISSUED
   EMAILED
   FAILED

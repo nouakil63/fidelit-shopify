@@ -6,7 +6,7 @@ embedded = true
 name = "Programme Fidélité Katmikko"
 
 [access_scopes]
-scopes = "read_customers,read_orders,write_discounts,write_app_proxy"
+scopes = "read_customers,read_orders,read_discounts,write_discounts,write_app_proxy"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
