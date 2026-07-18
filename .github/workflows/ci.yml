@@ -20,7 +20,10 @@ jobs:
         run: npm ci
 
       - name: Vérifier TypeScript
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
 
       - name: Vérifier ESLint
         run: npm run lint

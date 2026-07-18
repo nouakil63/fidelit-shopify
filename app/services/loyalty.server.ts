@@ -11,6 +11,10 @@ import {
 
 import prisma from "../db.server";
 import { sendRewardEmail } from "./email.server";
+import {
+  createRewardDiscountCode,
+  isRewardRetryable,
+} from "./reward-utils.server";
 import type {
   AdminGraphqlClient,
   ShopifyCustomerSnapshot,
@@ -84,6 +88,12 @@ const CREATE_DISCOUNT_MUTATION = `#graphql
   }
 `;
 
+const FIND_DISCOUNT_BY_CODE_QUERY = `#graphql
+  query LoyaltyDiscountByCode($code: String!) {
+    codeDiscountNodeByCode(code: $code) { id }
+  }
+`;
+
 type CustomerNode = {
   id: string;
   firstName: string | null;
@@ -125,11 +135,6 @@ type RecentOrdersGraphql = {
 
 function referralCode() {
   return randomBytes(5).toString("hex").toUpperCase();
-}
-
-function discountCode(customerId: string) {
-  const suffix = customerId.replace(/\D/g, "").slice(-5) || "VIP";
-  return `FID-${suffix}-${randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
 function customerSnapshot(customer: CustomerNode): ShopifyCustomerSnapshot {
@@ -333,6 +338,18 @@ async function createShopifyDiscount(
       ...(json.errors?.map((error) => error.message) ?? []),
       ...(result?.userErrors.map((error) => error.message) ?? []),
     ];
+
+    // A previous attempt may have created the Shopify discount before the
+    // local database update failed. The deterministic code lets us recover
+    // that discount instead of creating a duplicate.
+    const existingResponse = await admin.graphql(FIND_DISCOUNT_BY_CODE_QUERY, {
+      variables: { code },
+    });
+    const existingJson = (await existingResponse.json()) as {
+      data?: { codeDiscountNodeByCode?: { id: string } | null };
+    };
+    const existing = existingJson.data?.codeDiscountNodeByCode;
+    if (existing) return existing.id;
     throw new Error(errors.join(", ") || "Shopify n'a pas créé le code promo.");
   }
 
@@ -364,6 +381,7 @@ async function issueReward(input: IssueRewardInput) {
         rewardType: input.type,
         rewardValue: input.value,
         currencyCode: input.customer.currencyCode,
+        status: RewardStatus.PROCESSING,
       },
     });
   } catch (error) {
@@ -371,14 +389,28 @@ async function issueReward(input: IssueRewardInput) {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      return prisma.reward.findUnique({
+      const existing = await prisma.reward.findUnique({
         where: { dedupeKey: input.dedupeKey },
       });
+      if (!existing || existing.status !== RewardStatus.FAILED) return existing;
+
+      const claimed = await prisma.reward.updateMany({
+        where: { id: existing.id, status: RewardStatus.FAILED },
+        data: { status: RewardStatus.PROCESSING, failureReason: null },
+      });
+      if (claimed.count !== 1) {
+        return prisma.reward.findUnique({ where: { id: existing.id } });
+      }
+      reward = { ...existing, status: RewardStatus.PROCESSING };
+    } else {
+      throw error;
     }
-    throw error;
   }
 
-  const code = discountCode(input.customer.shopifyCustomerId);
+  const code = createRewardDiscountCode(
+    input.customer.shopifyCustomerId,
+    reward.id,
+  );
   const expiresAt = new Date(
     Date.now() + input.settings.validityDays * 24 * 60 * 60 * 1000,
   );
@@ -447,6 +479,70 @@ async function issueReward(input: IssueRewardInput) {
       },
     });
   }
+}
+
+export async function retryRewardIssuance(
+  admin: AdminGraphqlClient,
+  shop: string,
+  rewardId: string,
+) {
+  const staleBefore = new Date(Date.now() - 15 * 60 * 1000);
+  const reward = await prisma.reward.findFirst({
+    where: { id: rewardId, shop },
+    include: { customer: true },
+  });
+  if (!reward) {
+    return { retried: false as const, reason: "Récompense introuvable." };
+  }
+
+  const retryable = isRewardRetryable(
+    reward.status,
+    reward.updatedAt,
+    staleBefore,
+  );
+  if (!retryable) {
+    return {
+      retried: false as const,
+      reason: "Cette récompense n'a pas besoin d'être relancée.",
+    };
+  }
+
+  // Older failures may already have a valid Shopify discount. In that case,
+  // only retry the email and keep the original code.
+  if (reward.discountCode && reward.expiresAt) {
+    const email = await retryRewardEmail(shop, reward.id);
+    return { retried: true as const, email };
+  }
+
+  const prepared = await prisma.reward.updateMany({
+    where: {
+      id: reward.id,
+      shop,
+      OR: [
+        { status: RewardStatus.FAILED },
+        { status: RewardStatus.PENDING },
+        { status: RewardStatus.PROCESSING, updatedAt: { lt: staleBefore } },
+      ],
+    },
+    data: { status: RewardStatus.FAILED },
+  });
+  if (prepared.count !== 1) {
+    return { retried: false as const, reason: "Relance déjà en cours." };
+  }
+
+  const settings = await getOrCreateSettings(shop);
+  const result = await issueReward({
+    admin,
+    shop,
+    customer: reward.customer,
+    settings,
+    kind: reward.kind,
+    milestone: reward.milestone ?? undefined,
+    type: reward.rewardType,
+    value: reward.rewardValue,
+    dedupeKey: reward.dedupeKey,
+  });
+  return { retried: true as const, reward: result };
 }
 
 export async function retryRewardEmail(shop: string, rewardId: string) {

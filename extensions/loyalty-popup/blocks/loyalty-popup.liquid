@@ -6,6 +6,7 @@
   data-account-url="{{ routes.account_register_url }}"
   data-authenticated="{% if customer %}true{% else %}false{% endif %}"
   style="--loyalty-accent: {{ block.settings.accent_color }}; --loyalty-text: {{ block.settings.text_color }};"
+  hidden
 >
   <button class="loyalty-launcher" type="button" data-loyalty-open aria-label="Ouvrir mon espace fidélité">
     <span aria-hidden="true">★</span>

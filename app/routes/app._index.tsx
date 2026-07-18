@@ -17,6 +17,7 @@ import { authenticate } from "../shopify.server";
 import {
   evaluateMilestones,
   getOrCreateSettings,
+  retryRewardIssuance,
   retryRewardEmail,
   startProgramFromZero,
   syncRecentOrders,
@@ -216,6 +217,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     };
   }
 
+  if (intent === "retry_rewards") {
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000);
+    const failedRewards = await prisma.reward.findMany({
+      where: {
+        shop: session.shop,
+        OR: [
+          { status: RewardStatus.FAILED },
+          { status: RewardStatus.PENDING },
+          { status: RewardStatus.PROCESSING, updatedAt: { lt: staleBefore } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+      take: 25,
+    });
+
+    let retried = 0;
+    for (const reward of failedRewards) {
+      const result = await retryRewardIssuance(admin, session.shop, reward.id);
+      if (result.retried) retried += 1;
+    }
+
+    return {
+      ok: retried === failedRewards.length,
+      message:
+        failedRewards.length === 0
+          ? "Aucune récompense à relancer."
+          : `${retried} récompense(s) relancée(s) sur ${failedRewards.length}.`,
+    };
+  }
+
   if (intent !== "save") {
     return { ok: false, message: "Action inconnue." };
   }
@@ -406,6 +437,16 @@ export default function Index() {
                 Envoyer les e-mails en attente
               </button>
             </Form>
+            <Form method="post">
+              <input type="hidden" name="intent" value="retry_rewards" />
+              <button
+                style={{ ...buttonStyle, background: "#8e1f0b" }}
+                type="submit"
+                disabled={busy}
+              >
+                Relancer les récompenses en échec
+              </button>
+            </Form>
             <a
               href={data.themeEditorUrl}
               target="_top"
@@ -523,6 +564,13 @@ export default function Index() {
                 label="Cumulable avec les remises de livraison"
                 defaultChecked={settings.combineShippingDiscounts}
               />
+              <p style={{ color: "#40534a", margin: 0 }}>
+                Règle actuelle : tous les {settings.threshold} € cumulés, le
+                client reçoit {settings.rewardValue}
+                {settings.rewardType === "PERCENTAGE" ? " %" : " €"}
+                de remise, valable {settings.validityDays} jour(s). Ces quatre
+                valeurs sont modifiables librement par la marchande.
+              </p>
             </div>
           </s-section>
 
