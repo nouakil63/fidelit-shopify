@@ -1,0 +1,235 @@
+.loyalty-admin {
+  --loyalty-ink: #17211b;
+  --loyalty-muted: #607067;
+  --loyalty-green: #1f5f3f;
+  --loyalty-green-dark: #15452e;
+  color: var(--loyalty-ink);
+  display: block;
+  margin: 0 auto;
+  max-width: 1180px;
+}
+
+.loyalty-admin > s-section {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.loyalty-hero {
+  align-items: center;
+  background:
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(222, 186, 111, 0.28),
+      transparent 34%
+    ),
+    linear-gradient(135deg, #173d2a 0%, #235d40 58%, #347755 100%);
+  border-radius: 18px;
+  box-shadow: 0 16px 38px rgba(23, 61, 42, 0.18);
+  color: #fff;
+  display: flex;
+  gap: 28px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  overflow: hidden;
+  padding: 28px 30px;
+}
+
+.loyalty-hero h2 {
+  color: #fff;
+  font-size: clamp(24px, 3vw, 36px);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  margin: 8px 0 10px;
+  max-width: 650px;
+}
+
+.loyalty-hero p {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+  margin: 0;
+  max-width: 630px;
+}
+
+.loyalty-eyebrow {
+  color: #f1d28c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.loyalty-program-pill {
+  align-items: center;
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  padding: 9px 13px;
+}
+
+.loyalty-program-pill span {
+  background: #f0bf57;
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+.loyalty-program-pill.is-active span {
+  background: #75df9c;
+  box-shadow: 0 0 0 4px rgba(117, 223, 156, 0.15);
+}
+
+.loyalty-notice {
+  border-radius: 10px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding: 13px 16px;
+}
+
+.loyalty-notice.is-success {
+  background: #eaf7ee;
+  border: 1px solid #bee2c8;
+  color: #185c31;
+}
+
+.loyalty-notice.is-error {
+  background: #fff1f0;
+  border: 1px solid #f2c4c0;
+  color: #8c1d18;
+}
+
+.loyalty-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.loyalty-metric-card {
+  background: linear-gradient(145deg, #f8faf8, #f0f5f1);
+  border: 1px solid #dfe9e2;
+  border-radius: 14px;
+  min-height: 88px;
+  padding: 17px 18px;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.loyalty-metric-card:hover {
+  box-shadow: 0 10px 22px rgba(31, 95, 63, 0.09);
+  transform: translateY(-2px);
+}
+
+.loyalty-metric-label {
+  color: var(--loyalty-muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.loyalty-metric-value {
+  color: var(--loyalty-green-dark);
+  font-size: 30px;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  margin-top: 5px;
+}
+
+.loyalty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.loyalty-admin button,
+.loyalty-admin a {
+  transition:
+    filter 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.loyalty-admin button:not(:disabled):hover,
+.loyalty-admin a:hover {
+  box-shadow: 0 7px 15px rgba(22, 55, 38, 0.14);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.loyalty-admin input:focus,
+.loyalty-admin select:focus,
+.loyalty-admin textarea:focus {
+  border-color: var(--loyalty-green) !important;
+  box-shadow: 0 0 0 3px rgba(31, 95, 63, 0.12);
+  outline: none;
+}
+
+.loyalty-start-card {
+  align-items: center;
+  background: #f8f5eb;
+  border: 1px solid #e8dcb9;
+  border-radius: 14px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 17px 18px;
+}
+
+.loyalty-start-card strong {
+  color: #5c4715;
+  font-size: 14px;
+}
+
+.loyalty-start-card p {
+  color: #746440;
+  margin: 4px 0 0;
+}
+
+.loyalty-start-button {
+  background: var(--loyalty-green);
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  cursor: pointer;
+  font-weight: 750;
+  min-height: 42px;
+  padding: 9px 16px;
+  white-space: nowrap;
+}
+
+.loyalty-ready-badge {
+  background: #dff2e5;
+  border-radius: 999px;
+  color: #1a6336;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 12px;
+  text-transform: uppercase;
+}
+
+.loyalty-admin table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+@media (max-width: 700px) {
+  .loyalty-hero,
+  .loyalty-start-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .loyalty-hero {
+    padding: 23px 20px;
+  }
+
+  .loyalty-start-button {
+    white-space: normal;
+  }
+}

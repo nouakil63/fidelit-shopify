@@ -1,0 +1,13 @@
+[build]
+command = "npm run build:netlify"
+publish = "build/client"
+
+[build.environment]
+NODE_VERSION = "22.22.0"
+NPM_FLAGS = "--include=dev"
+
+[dev]
+command = "react-router dev"
+
+[functions]
+node_bundler = "esbuild"

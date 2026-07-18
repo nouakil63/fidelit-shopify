@@ -1,0 +1,77 @@
+<div
+  id="loyalty-root-{{ block.id }}"
+  class="loyalty-root loyalty-root--{{ block.settings.position }}"
+  data-loyalty-root
+  data-proxy-url="/apps/fidelite"
+  data-account-url="{{ routes.account_register_url }}"
+  data-authenticated="{% if customer %}true{% else %}false{% endif %}"
+  style="--loyalty-accent: {{ block.settings.accent_color }}; --loyalty-text: {{ block.settings.text_color }};"
+>
+  <button class="loyalty-launcher" type="button" data-loyalty-open aria-label="Ouvrir mon espace fidélité">
+    <span aria-hidden="true">★</span>
+    <span>Fidélité</span>
+  </button>
+
+  <div class="loyalty-backdrop" data-loyalty-backdrop hidden>
+    <section class="loyalty-dialog" role="dialog" aria-modal="true" aria-labelledby="loyalty-title-{{ block.id }}">
+      <button class="loyalty-close" type="button" data-loyalty-close aria-label="Fermer">×</button>
+      <p class="loyalty-kicker">Programme fidélité</p>
+      <h2 id="loyalty-title-{{ block.id }}" data-loyalty-title>Votre fidélité récompensée</h2>
+      <p data-loyalty-text>Créez votre compte pour cumuler vos achats et débloquer vos récompenses.</p>
+
+      <div data-loyalty-guest>
+        <a class="loyalty-primary" data-loyalty-account href="{{ routes.account_register_url }}">Créer mon compte</a>
+      </div>
+
+      <div data-loyalty-member hidden>
+        <div class="loyalty-balance">
+          <span>Achats cumulés</span>
+          <strong data-loyalty-spend>—</strong>
+        </div>
+        <p><strong data-loyalty-next>—</strong> avant la prochaine récompense.</p>
+        <div data-loyalty-referral hidden>
+          <p class="loyalty-referral-label">Votre lien de parrainage</p>
+          <div class="loyalty-copy-row">
+            <input data-loyalty-referral-link readonly aria-label="Lien de parrainage">
+            <button type="button" data-loyalty-copy>Copier</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="loyalty-status" data-loyalty-status aria-live="polite"></p>
+    </section>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Programme fidélité",
+  "target": "body",
+  "stylesheet": "loyalty-popup.css",
+  "javascript": "loyalty-popup.js",
+  "settings": [
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Couleur principale",
+      "default": "#1f5132"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Couleur du texte",
+      "default": "#17211b"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Position du bouton",
+      "default": "right",
+      "options": [
+        { "value": "left", "label": "À gauche" },
+        { "value": "right", "label": "À droite" }
+      ]
+    }
+  ]
+}
+{% endschema %}

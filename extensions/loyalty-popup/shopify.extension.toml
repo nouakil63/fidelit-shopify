@@ -1,0 +1,7 @@
+api_version = "2026-07"
+
+[[extensions]]
+name = "Programme fidélité"
+handle = "loyalty-popup"
+uid = "536f9162-4e31-6373-8725-1412c6fe9856d0bcc8b3"
+type = "theme"

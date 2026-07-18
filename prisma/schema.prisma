@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+enum RewardType {
+  FIXED
+  PERCENTAGE
+}
+
+enum RewardKind {
+  MILESTONE
+  REFERRER
+  REFERRED
+}
+
+enum RewardStatus {
+  PENDING
+  ISSUED
+  EMAILED
+  FAILED
+}
+
+enum ReferralStatus {
+  SIGNED_UP
+  QUALIFIED
+}
+
+model ProgramSettings {
+  shop                        String     @id
+  enabled                     Boolean    @default(false)
+  threshold                   Decimal    @default(100)
+  rewardType                  RewardType @default(FIXED)
+  rewardValue                 Decimal    @default(10)
+  repeatRewards               Boolean    @default(true)
+  validityDays                Int        @default(30)
+  combineOrderDiscounts       Boolean    @default(false)
+  combineProductDiscounts     Boolean    @default(false)
+  combineShippingDiscounts    Boolean    @default(false)
+  popupEnabled                Boolean    @default(true)
+  popupTitle                  String     @default("Votre fidélité récompensée")
+  popupText                   String     @default("Créez votre compte et recevez une récompense à chaque palier atteint.")
+  popupButtonLabel            String     @default("Créer mon compte")
+  popupDelaySeconds           Int        @default(5)
+  referralEnabled             Boolean    @default(true)
+  referralRewardType          RewardType @default(FIXED)
+  referralAdvocateRewardValue Decimal    @default(10)
+  referralFriendRewardValue   Decimal    @default(10)
+  customerSyncCursor          String?
+  customerSyncCompletedAt     DateTime?
+  rewardEvaluationCursor      String?
+  programStartedAt            DateTime?
+  createdAt                   DateTime   @default(now())
+  updatedAt                   DateTime   @updatedAt
+}
+
+model LoyaltyCustomer {
+  id                 String            @id @default(cuid())
+  shop               String
+  shopifyCustomerId  String
+  email              String?
+  firstName          String?
+  lastName           String?
+  currencyCode       String            @default("EUR")
+  lifetimeSpend      Decimal           @default(0)
+  referralCode       String
+  referredById       String?
+  referredBy         LoyaltyCustomer?  @relation("CustomerReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          LoyaltyCustomer[] @relation("CustomerReferrals")
+  orders             LoyaltyOrder[]
+  rewards            Reward[]
+  advocatedReferrals Referral[]        @relation("ReferralAdvocate")
+  receivedReferral   Referral?         @relation("ReferralReferred")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([shop, shopifyCustomerId])
+  @@unique([shop, referralCode])
+  @@index([shop, email])
+}
+
+model LoyaltyOrder {
+  id              String          @id @default(cuid())
+  shop            String
+  shopifyOrderId  String
+  orderName       String?
+  customerId      String
+  customer        LoyaltyCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  eligibleAmount  Decimal         @default(0)
+  currencyCode    String          @default("EUR")
+  financialStatus String
+  processedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([shop, shopifyOrderId])
+  @@index([shop, customerId])
+}
+
+model Referral {
+  id          String          @id @default(cuid())
+  shop        String
+  advocateId  String
+  advocate    LoyaltyCustomer @relation("ReferralAdvocate", fields: [advocateId], references: [id], onDelete: Cascade)
+  referredId  String          @unique
+  referred    LoyaltyCustomer @relation("ReferralReferred", fields: [referredId], references: [id], onDelete: Cascade)
+  status      ReferralStatus  @default(SIGNED_UP)
+  qualifiedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([shop, advocateId])
+}
+
+model Reward {
+  id                String          @id @default(cuid())
+  shop              String
+  customerId        String
+  customer          LoyaltyCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kind              RewardKind
+  milestone         Int?
+  dedupeKey         String          @unique
+  rewardType        RewardType
+  rewardValue       Decimal
+  currencyCode      String
+  status            RewardStatus    @default(PENDING)
+  discountCode      String?
+  shopifyDiscountId String?
+  expiresAt         DateTime?
+  emailedAt         DateTime?
+  emailProviderId   String?
+  failureReason     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([shop, customerId, status])
+}

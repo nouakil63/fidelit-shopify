@@ -1,0 +1,54 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "23258548aa1bc75fc8d3460809413e42"
+application_url = "https://katmikko-fidelite.netlify.app"
+embedded = true
+name = "Programme Fidélité Katmikko"
+
+[access_scopes]
+scopes = "read_customers,read_orders,write_discounts,write_app_proxy"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = ["app/scopes_update"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/sync"
+  topics = ["customers/create", "customers/update"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/orders/sync"
+  topics = ["orders/paid", "orders/cancelled", "refunds/create"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = ["customers/data_request"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  compliance_topics = ["customers/redact"]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  compliance_topics = ["shop/redact"]
+
+[app_proxy]
+url = "/proxy/loyalty"
+prefix = "apps"
+subpath = "fidelite"
+
+[auth]
+redirect_urls = ["https://katmikko-fidelite.netlify.app/auth/callback"]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
