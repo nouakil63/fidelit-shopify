@@ -10,6 +10,7 @@ import {
   useLoaderData,
   useNavigation,
 } from "react-router";
+import { useState } from "react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import prisma from "../db.server";
@@ -24,31 +25,6 @@ import {
 } from "../services/loyalty.server";
 import { syncAllCustomers } from "../services/sync.server";
 import "../styles/loyalty-admin.css";
-
-const fieldStyle = {
-  display: "grid",
-  gap: "6px",
-} as const;
-
-const inputStyle = {
-  border: "1px solid #8a8a8a",
-  borderRadius: "8px",
-  fontSize: "14px",
-  minHeight: "40px",
-  padding: "8px 10px",
-  width: "100%",
-} as const;
-
-const buttonStyle = {
-  background: "#303030",
-  border: 0,
-  borderRadius: "8px",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 600,
-  minHeight: "40px",
-  padding: "8px 16px",
-} as const;
 
 function numberValue(form: FormData, key: string, minimum: number) {
   const value = Number(form.get(key));
@@ -330,8 +306,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label style={fieldStyle}>
-      <span style={{ fontWeight: 600 }}>{label}</span>
+    <label className="loyalty-field">
+      <span>{label}</span>
       {children}
     </label>
   );
@@ -347,9 +323,15 @@ function Checkbox({
   defaultChecked: boolean;
 }) {
   return (
-    <label style={{ alignItems: "center", display: "flex", gap: "8px" }}>
-      <input name={name} type="checkbox" defaultChecked={defaultChecked} />
-      <span>{label}</span>
+    <label className="loyalty-toggle-row">
+      <input
+        className="loyalty-toggle-input"
+        name={name}
+        type="checkbox"
+        defaultChecked={defaultChecked}
+      />
+      <span className="loyalty-toggle" aria-hidden="true" />
+      <span className="loyalty-toggle-label">{label}</span>
     </label>
   );
 }
@@ -360,6 +342,11 @@ export default function Index() {
   const navigation = useNavigation();
   const settings = data.settings;
   const busy = navigation.state !== "idle";
+  const [popupPreview, setPopupPreview] = useState({
+    title: settings.popupTitle,
+    text: settings.popupText,
+    buttonLabel: settings.popupButtonLabel,
+  });
 
   return (
     <s-page heading="Programme de fidélité">
@@ -407,20 +394,28 @@ export default function Index() {
           <div className="loyalty-actions">
             <Form method="post">
               <input type="hidden" name="intent" value="sync" />
-              <button style={buttonStyle} type="submit" disabled={busy}>
+              <button
+                className="loyalty-button is-secondary"
+                type="submit"
+                disabled={busy}
+              >
                 Synchroniser les clients Shopify
               </button>
             </Form>
             <Form method="post">
               <input type="hidden" name="intent" value="sync_orders" />
-              <button style={buttonStyle} type="submit" disabled={busy}>
+              <button
+                className="loyalty-button is-secondary"
+                type="submit"
+                disabled={busy}
+              >
                 Synchroniser les commandes récentes
               </button>
             </Form>
             <Form method="post">
               <input type="hidden" name="intent" value="evaluate" />
               <button
-                style={{ ...buttonStyle, background: "#6b4f00" }}
+                className="loyalty-button is-accent"
                 type="submit"
                 disabled={busy}
               >
@@ -430,7 +425,7 @@ export default function Index() {
             <Form method="post">
               <input type="hidden" name="intent" value="retry_emails" />
               <button
-                style={{ ...buttonStyle, background: "#005bd3" }}
+                className="loyalty-button is-primary"
                 type="submit"
                 disabled={busy}
               >
@@ -440,7 +435,7 @@ export default function Index() {
             <Form method="post">
               <input type="hidden" name="intent" value="retry_rewards" />
               <button
-                style={{ ...buttonStyle, background: "#8e1f0b" }}
+                className="loyalty-button is-danger"
                 type="submit"
                 disabled={busy}
               >
@@ -450,12 +445,7 @@ export default function Index() {
             <a
               href={data.themeEditorUrl}
               target="_top"
-              style={{
-                ...buttonStyle,
-                display: "inline-grid",
-                placeItems: "center",
-                textDecoration: "none",
-              }}
+              className="loyalty-button is-secondary"
             >
               Activer le pop-up dans le thème
             </a>
@@ -491,7 +481,7 @@ export default function Index() {
           <input type="hidden" name="intent" value="save" />
 
           <s-section heading="Palier et récompense">
-            <div style={{ display: "grid", gap: "14px" }}>
+            <div className="loyalty-section-stack">
               <Checkbox
                 name="enabled"
                 label="Programme actif (les prochains événements peuvent créer des codes)"
@@ -502,16 +492,9 @@ export default function Index() {
                 label="Répéter la récompense à chaque nouveau palier (sinon une seule fois)"
                 defaultChecked={settings.repeatRewards}
               />
-              <div
-                style={{
-                  display: "grid",
-                  gap: 14,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                }}
-              >
+              <div className="loyalty-field-grid is-four-columns">
                 <Field label="Palier d'achats cumulés">
                   <input
-                    style={inputStyle}
                     name="threshold"
                     type="number"
                     step="0.01"
@@ -520,18 +503,13 @@ export default function Index() {
                   />
                 </Field>
                 <Field label="Type de remise">
-                  <select
-                    style={inputStyle}
-                    name="rewardType"
-                    defaultValue={settings.rewardType}
-                  >
+                  <select name="rewardType" defaultValue={settings.rewardType}>
                     <option value="FIXED">Montant fixe</option>
                     <option value="PERCENTAGE">Pourcentage</option>
                   </select>
                 </Field>
                 <Field label="Valeur de la remise">
                   <input
-                    style={inputStyle}
                     name="rewardValue"
                     type="number"
                     step="0.01"
@@ -541,7 +519,6 @@ export default function Index() {
                 </Field>
                 <Field label="Validité du code (jours)">
                   <input
-                    style={inputStyle}
                     name="validityDays"
                     type="number"
                     min="1"
@@ -564,7 +541,7 @@ export default function Index() {
                 label="Cumulable avec les remises de livraison"
                 defaultChecked={settings.combineShippingDiscounts}
               />
-              <p style={{ color: "#40534a", margin: 0 }}>
+              <p className="loyalty-rule-summary">
                 Règle actuelle : tous les {settings.threshold} € cumulés, le
                 client reçoit {settings.rewardValue}
                 {settings.rewardType === "PERCENTAGE" ? " %" : " €"}
@@ -575,7 +552,7 @@ export default function Index() {
           </s-section>
 
           <s-section heading="Pop-up boutique">
-            <div style={{ display: "grid", gap: "14px" }}>
+            <div className="loyalty-section-stack">
               <Checkbox
                 name="popupEnabled"
                 label="Afficher le pop-up"
@@ -583,38 +560,47 @@ export default function Index() {
               />
               <Field label="Titre">
                 <input
-                  style={inputStyle}
                   name="popupTitle"
-                  defaultValue={settings.popupTitle}
+                  value={popupPreview.title}
+                  onChange={(event) =>
+                    setPopupPreview((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
                   required
                 />
               </Field>
               <Field label="Texte">
                 <textarea
-                  style={{ ...inputStyle, minHeight: 90 }}
+                  className="loyalty-textarea"
                   name="popupText"
-                  defaultValue={settings.popupText}
+                  value={popupPreview.text}
+                  onChange={(event) =>
+                    setPopupPreview((current) => ({
+                      ...current,
+                      text: event.target.value,
+                    }))
+                  }
                   required
                 />
               </Field>
-              <div
-                style={{
-                  display: "grid",
-                  gap: 14,
-                  gridTemplateColumns: "2fr 1fr",
-                }}
-              >
+              <div className="loyalty-field-grid is-popup-grid">
                 <Field label="Libellé du bouton">
                   <input
-                    style={inputStyle}
                     name="popupButtonLabel"
-                    defaultValue={settings.popupButtonLabel}
+                    value={popupPreview.buttonLabel}
+                    onChange={(event) =>
+                      setPopupPreview((current) => ({
+                        ...current,
+                        buttonLabel: event.target.value,
+                      }))
+                    }
                     required
                   />
                 </Field>
                 <Field label="Délai (secondes)">
                   <input
-                    style={inputStyle}
                     name="popupDelaySeconds"
                     type="number"
                     min="0"
@@ -622,26 +608,38 @@ export default function Index() {
                   />
                 </Field>
               </div>
+              <div
+                className="loyalty-popup-preview"
+                aria-label="Aperçu du pop-up"
+              >
+                <div className="loyalty-preview-header">
+                  <span>Aperçu boutique</span>
+                  <span className="loyalty-preview-dot" />
+                </div>
+                <div className="loyalty-preview-window">
+                  <span className="loyalty-preview-kicker">
+                    Programme fidélité
+                  </span>
+                  <strong>{popupPreview.title || "Titre du pop-up"}</strong>
+                  <p>{popupPreview.text || "Texte du pop-up"}</p>
+                  <span className="loyalty-preview-button">
+                    {popupPreview.buttonLabel || "Libellé du bouton"}
+                  </span>
+                </div>
+              </div>
             </div>
           </s-section>
 
           <s-section heading="Parrainage">
-            <div style={{ display: "grid", gap: "14px" }}>
+            <div className="loyalty-section-stack">
               <Checkbox
                 name="referralEnabled"
                 label="Activer le parrainage"
                 defaultChecked={settings.referralEnabled}
               />
-              <div
-                style={{
-                  display: "grid",
-                  gap: 14,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-                }}
-              >
+              <div className="loyalty-field-grid is-three-columns">
                 <Field label="Type de récompense">
                   <select
-                    style={inputStyle}
                     name="referralRewardType"
                     defaultValue={settings.referralRewardType}
                   >
@@ -651,7 +649,6 @@ export default function Index() {
                 </Field>
                 <Field label="Récompense du parrain">
                   <input
-                    style={inputStyle}
                     name="referralAdvocateRewardValue"
                     type="number"
                     step="0.01"
@@ -661,7 +658,6 @@ export default function Index() {
                 </Field>
                 <Field label="Récompense du filleul">
                   <input
-                    style={inputStyle}
                     name="referralFriendRewardValue"
                     type="number"
                     step="0.01"
@@ -670,15 +666,19 @@ export default function Index() {
                   />
                 </Field>
               </div>
-              <p style={{ color: "#616161", margin: 0 }}>
+              <p className="loyalty-help-text">
                 Le parrainage est validé lors de la première commande payée du
                 filleul.
               </p>
             </div>
           </s-section>
 
-          <div style={{ padding: "16px 0 28px" }}>
-            <button style={buttonStyle} type="submit" disabled={busy}>
+          <div className="loyalty-save-bar">
+            <button
+              className="loyalty-button is-save"
+              type="submit"
+              disabled={busy}
+            >
               {busy ? "Enregistrement…" : "Enregistrer les paramètres"}
             </button>
           </div>
@@ -688,22 +688,13 @@ export default function Index() {
           {data.recentRewards.length === 0 ? (
             <s-paragraph>Aucune récompense créée pour le moment.</s-paragraph>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <div className="loyalty-table-wrap">
+              <table className="loyalty-table">
                 <thead>
                   <tr>
                     {["Client", "Code", "Statut", "Détail", "Date"].map(
                       (heading) => (
-                        <th
-                          key={heading}
-                          style={{
-                            borderBottom: "1px solid #ddd",
-                            padding: 10,
-                            textAlign: "left",
-                          }}
-                        >
-                          {heading}
-                        </th>
+                        <th key={heading}>{heading}</th>
                       ),
                     )}
                   </tr>
@@ -711,29 +702,21 @@ export default function Index() {
                 <tbody>
                   {data.recentRewards.map((reward) => (
                     <tr key={reward.id}>
-                      <td
-                        style={{ borderBottom: "1px solid #eee", padding: 10 }}
-                      >
-                        {reward.customer}
-                      </td>
-                      <td
-                        style={{ borderBottom: "1px solid #eee", padding: 10 }}
-                      >
+                      <td>{reward.customer}</td>
+                      <td className="loyalty-code-cell">
                         {reward.code ?? "—"}
                       </td>
-                      <td
-                        style={{ borderBottom: "1px solid #eee", padding: 10 }}
-                      >
-                        {reward.status}
+                      <td>
+                        <span
+                          className={`loyalty-status is-${reward.status.toLowerCase()}`}
+                        >
+                          {reward.status}
+                        </span>
                       </td>
-                      <td
-                        style={{ borderBottom: "1px solid #eee", padding: 10 }}
-                      >
+                      <td className="loyalty-detail-cell">
                         {reward.failureReason ?? "—"}
                       </td>
-                      <td
-                        style={{ borderBottom: "1px solid #eee", padding: 10 }}
-                      >
+                      <td>
                         {new Intl.DateTimeFormat("fr-FR").format(
                           new Date(reward.createdAt),
                         )}
