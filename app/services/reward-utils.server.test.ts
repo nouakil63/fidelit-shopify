@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   createRewardDiscountCode,
+  isOrderThresholdReached,
+  isReferralEligible,
   isRewardRetryable,
 } from "./reward-utils.server";
 
@@ -62,4 +64,39 @@ describe("isRewardRetryable", () => {
       expect(isRewardRetryable(status, new Date(0), staleBefore)).toBe(false);
     },
   );
+});
+
+describe("isOrderThresholdReached", () => {
+  it("requires one order to reach the full threshold", () => {
+    expect(isOrderThresholdReached("299.99", "300")).toBe(false);
+    expect(isOrderThresholdReached("300", "300")).toBe(true);
+    expect(isOrderThresholdReached("450", "300")).toBe(true);
+  });
+
+  it("does not combine separate orders", () => {
+    const orders = [150, 150];
+    expect(orders.some((amount) => isOrderThresholdReached(amount, 300))).toBe(
+      false,
+    );
+  });
+
+  it("rejects invalid thresholds", () => {
+    expect(isOrderThresholdReached(300, 0)).toBe(false);
+    expect(isOrderThresholdReached("invalid", 300)).toBe(false);
+  });
+});
+
+describe("isReferralEligible", () => {
+  it("accepts a customer who has never spent money", () => {
+    expect(isReferralEligible("0.00")).toBe(true);
+  });
+
+  it("rejects a customer who already purchased", () => {
+    expect(isReferralEligible("0.01")).toBe(false);
+    expect(isReferralEligible("125.50")).toBe(false);
+  });
+
+  it("rejects an invalid Shopify amount", () => {
+    expect(isReferralEligible("invalid")).toBe(false);
+  });
 });

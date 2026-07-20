@@ -2,15 +2,16 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -75,13 +76,15 @@ model ProgramSettings {
   popupButtonLabel            String     @default("Créer mon compte")
   popupDelaySeconds           Int        @default(5)
   referralEnabled             Boolean    @default(true)
-  referralRewardType          RewardType @default(FIXED)
+  referralAdvocateRewardType  RewardType @default(FIXED)
   referralAdvocateRewardValue Decimal    @default(10)
+  referralFriendRewardType    RewardType @default(FIXED)
   referralFriendRewardValue   Decimal    @default(10)
   customerSyncCursor          String?
   customerSyncCompletedAt     DateTime?
   rewardEvaluationCursor      String?
   programStartedAt            DateTime?
+  automaticDiscountId         String?
   createdAt                   DateTime   @default(now())
   updatedAt                   DateTime   @updatedAt
 }

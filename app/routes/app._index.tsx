@@ -15,8 +15,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
+import { syncAutomaticOrderDiscount } from "../services/automatic-discount.server";
 import {
-  evaluateMilestones,
   getOrCreateSettings,
   retryRewardIssuance,
   retryRewardEmail,
@@ -32,6 +32,17 @@ function numberValue(form: FormData, key: string, minimum: number) {
     throw new Error(`Valeur invalide pour ${key}.`);
   }
   return value;
+}
+
+function emailDeliveryConfigured() {
+  const apiKey = process.env.RESEND_API_KEY?.trim() ?? "";
+  const from = process.env.REWARD_EMAIL_FROM?.trim() ?? "";
+  return (
+    /^re_[A-Za-z0-9_-]+$/.test(apiKey) &&
+    !/x{4,}/i.test(apiKey) &&
+    /<[^<>\s]+@[^<>\s]+>|^[^\s@]+@[^\s@]+$/.test(from) &&
+    !/@example\.com>?$/i.test(from)
+  );
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -75,6 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       updatedAt: settings.updatedAt.toISOString(),
     },
     stats: { customers, rewards, emailedRewards, qualifiedReferrals },
+    emailConfigured: emailDeliveryConfigured(),
     recentRewards: recentRewards.map((reward) => ({
       id: reward.id,
       customer: reward.customer.email ?? reward.customer.shopifyCustomerId,
@@ -133,35 +145,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       };
     }
 
-    const customers = await prisma.loyaltyCustomer.findMany({
-      where: { shop: session.shop },
-      orderBy: { id: "asc" },
-      take: 25,
-      ...(settings.rewardEvaluationCursor
-        ? { cursor: { id: settings.rewardEvaluationCursor }, skip: 1 }
-        : {}),
-    });
-    let created = 0;
-    for (const customer of customers) {
-      const rewards = await evaluateMilestones(
-        admin,
-        session.shop,
-        customer,
-        settings,
-      );
-      created += rewards.length;
-    }
-
-    const hasNextBatch = customers.length === 25;
-    await prisma.programSettings.update({
-      where: { shop: session.shop },
-      data: {
-        rewardEvaluationCursor: hasNextBatch ? customers.at(-1)?.id : null,
-      },
-    });
+    await syncAutomaticOrderDiscount(admin, session.shop, settings);
     return {
       ok: true,
-      message: `${created} récompense(s) émise(s) sur ce lot${hasNextBatch ? ". Relancez pour traiter le lot suivant." : ". Tous les clients ont été évalués."}`,
+      message: "La remise automatique Shopify est synchronisée.",
     };
   }
 
@@ -233,11 +220,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Error("Cliquez d'abord sur « Démarrer les compteurs à zéro ».");
     }
     const rewardType = String(form.get("rewardType"));
-    const referralRewardType = String(form.get("referralRewardType"));
+    const referralAdvocateRewardType = String(
+      form.get("referralAdvocateRewardType"),
+    );
+    const referralFriendRewardType = String(
+      form.get("referralFriendRewardType"),
+    );
     if (!Object.values(RewardType).includes(rewardType as RewardType)) {
       throw new Error("Type de récompense invalide.");
     }
-    if (!Object.values(RewardType).includes(referralRewardType as RewardType)) {
+    if (
+      !Object.values(RewardType).includes(
+        referralAdvocateRewardType as RewardType,
+      ) ||
+      !Object.values(RewardType).includes(
+        referralFriendRewardType as RewardType,
+      )
+    ) {
       throw new Error("Type de récompense de parrainage invalide.");
     }
 
@@ -256,26 +255,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Error("Une remise en pourcentage ne peut pas dépasser 100 %.");
     }
     if (
-      referralRewardType === RewardType.PERCENTAGE &&
-      Math.max(referralAdvocateRewardValue, referralFriendRewardValue) > 100
+      (referralAdvocateRewardType === RewardType.PERCENTAGE &&
+        referralAdvocateRewardValue > 100) ||
+      (referralFriendRewardType === RewardType.PERCENTAGE &&
+        referralFriendRewardValue > 100)
     ) {
       throw new Error(
         "Une remise de parrainage en pourcentage ne peut pas dépasser 100 %.",
       );
     }
 
-    await prisma.programSettings.update({
+    const savedSettings = await prisma.programSettings.update({
       where: { shop: session.shop },
       data: {
         enabled: form.has("enabled"),
         threshold: numberValue(form, "threshold", 0.01),
         rewardType: rewardType as RewardType,
         rewardValue,
-        repeatRewards: form.has("repeatRewards"),
+        repeatRewards: true,
         validityDays: Math.round(numberValue(form, "validityDays", 1)),
-        combineOrderDiscounts: form.has("combineOrderDiscounts"),
-        combineProductDiscounts: form.has("combineProductDiscounts"),
-        combineShippingDiscounts: form.has("combineShippingDiscounts"),
+        combineOrderDiscounts: false,
+        combineProductDiscounts: false,
+        combineShippingDiscounts: false,
         popupEnabled: form.has("popupEnabled"),
         popupTitle: String(form.get("popupTitle") ?? "").trim(),
         popupText: String(form.get("popupText") ?? "").trim(),
@@ -284,12 +285,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           numberValue(form, "popupDelaySeconds", 0),
         ),
         referralEnabled: form.has("referralEnabled"),
-        referralRewardType: referralRewardType as RewardType,
+        referralAdvocateRewardType:
+          referralAdvocateRewardType as RewardType,
         referralAdvocateRewardValue,
+        referralFriendRewardType: referralFriendRewardType as RewardType,
         referralFriendRewardValue,
       },
     });
-    return { ok: true, message: "Paramètres enregistrés." };
+    await syncAutomaticOrderDiscount(admin, session.shop, savedSettings);
+    return {
+      ok: true,
+      message: "Paramètres enregistrés et remise automatique synchronisée.",
+    };
   } catch (error) {
     return {
       ok: false,
@@ -377,6 +384,14 @@ export default function Index() {
           </div>
         ) : null}
 
+        {!data.emailConfigured ? (
+          <div role="status" className="loyalty-notice is-warning">
+            Les codes sont disponibles dans l’espace Fidélité du client, mais
+            l’envoi automatique par e-mail reste désactivé tant que Resend et
+            l’adresse d’expédition ne sont pas configurés.
+          </div>
+        ) : null}
+
         <s-section heading="Vue d'ensemble">
           <div className="loyalty-metrics">
             {[
@@ -419,7 +434,7 @@ export default function Index() {
                 type="submit"
                 disabled={busy}
               >
-                Émettre les récompenses déjà acquises
+                Synchroniser la remise automatique
               </button>
             </Form>
             <Form method="post">
@@ -453,11 +468,11 @@ export default function Index() {
 
           <div className="loyalty-start-card">
             <div>
-              <strong>Point de départ du programme</strong>
+              <strong>Date d’activation du programme</strong>
               <p>
                 {settings.programStartedAt
-                  ? `Compteurs démarrés le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date(settings.programStartedAt))}.`
-                  : "Les achats antérieurs seront exclus et tous les clients commenceront à 0 €."}
+                  ? `Programme démarré le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date(settings.programStartedAt))}.`
+                  : "Choisissez la date à partir de laquelle la remise automatique sera active."}
               </p>
             </div>
             {!settings.programStartedAt ? (
@@ -468,7 +483,7 @@ export default function Index() {
                   type="submit"
                   disabled={busy}
                 >
-                  Démarrer les compteurs à zéro
+                  Activer à partir de maintenant
                 </button>
               </Form>
             ) : (
@@ -484,16 +499,12 @@ export default function Index() {
             <div className="loyalty-section-stack">
               <Checkbox
                 name="enabled"
-                label="Programme actif (les prochains événements peuvent créer des codes)"
+                label="Remise automatique active dans le panier et au paiement"
                 defaultChecked={settings.enabled}
               />
-              <Checkbox
-                name="repeatRewards"
-                label="Répéter la récompense à chaque nouveau palier (sinon une seule fois)"
-                defaultChecked={settings.repeatRewards}
-              />
-              <div className="loyalty-field-grid is-four-columns">
-                <Field label="Palier d'achats cumulés">
+              <input type="hidden" name="validityDays" value={settings.validityDays} />
+              <div className="loyalty-field-grid is-three-columns">
+                <Field label="Montant minimum d'une commande">
                   <input
                     name="threshold"
                     type="number"
@@ -517,36 +528,11 @@ export default function Index() {
                     defaultValue={settings.rewardValue}
                   />
                 </Field>
-                <Field label="Validité du code (jours)">
-                  <input
-                    name="validityDays"
-                    type="number"
-                    min="1"
-                    defaultValue={settings.validityDays}
-                  />
-                </Field>
               </div>
-              <Checkbox
-                name="combineOrderDiscounts"
-                label="Cumulable avec les remises sur commande"
-                defaultChecked={settings.combineOrderDiscounts}
-              />
-              <Checkbox
-                name="combineProductDiscounts"
-                label="Cumulable avec les remises produit"
-                defaultChecked={settings.combineProductDiscounts}
-              />
-              <Checkbox
-                name="combineShippingDiscounts"
-                label="Cumulable avec les remises de livraison"
-                defaultChecked={settings.combineShippingDiscounts}
-              />
               <p className="loyalty-rule-summary">
-                Règle actuelle : tous les {settings.threshold} € cumulés, le
-                client reçoit {settings.rewardValue}
+                Règle actuelle : dès que le panier atteint {settings.threshold} €, une remise de {settings.rewardValue}
                 {settings.rewardType === "PERCENTAGE" ? " %" : " €"}
-                de remise, valable {settings.validityDays} jour(s). Ces quatre
-                valeurs sont modifiables librement par la marchande.
+                est appliquée immédiatement et automatiquement. Elle ne se cumule avec aucune autre promotion.
               </p>
             </div>
           </s-section>
@@ -637,11 +623,11 @@ export default function Index() {
                 label="Activer le parrainage"
                 defaultChecked={settings.referralEnabled}
               />
-              <div className="loyalty-field-grid is-three-columns">
-                <Field label="Type de récompense">
+              <div className="loyalty-field-grid is-two-columns">
+                <Field label="Type de récompense du parrain">
                   <select
-                    name="referralRewardType"
-                    defaultValue={settings.referralRewardType}
+                    name="referralAdvocateRewardType"
+                    defaultValue={settings.referralAdvocateRewardType}
                   >
                     <option value="FIXED">Montant fixe</option>
                     <option value="PERCENTAGE">Pourcentage</option>
@@ -656,6 +642,15 @@ export default function Index() {
                     defaultValue={settings.referralAdvocateRewardValue}
                   />
                 </Field>
+                <Field label="Type de récompense du filleul">
+                  <select
+                    name="referralFriendRewardType"
+                    defaultValue={settings.referralFriendRewardType}
+                  >
+                    <option value="FIXED">Montant fixe</option>
+                    <option value="PERCENTAGE">Pourcentage</option>
+                  </select>
+                </Field>
                 <Field label="Récompense du filleul">
                   <input
                     name="referralFriendRewardValue"
@@ -667,8 +662,9 @@ export default function Index() {
                 </Field>
               </div>
               <p className="loyalty-help-text">
-                Le parrainage est validé lors de la première commande payée du
-                filleul.
+                Dès que le filleul crée son compte depuis le lien, son code de
+                réduction et celui du parrain sont générés. Chaque personne
+                reçoit son code par e-mail lorsque l’envoi est configuré.
               </p>
             </div>
           </s-section>

@@ -13,6 +13,7 @@ import prisma from "../db.server";
 import { sendRewardEmail } from "./email.server";
 import {
   createRewardDiscountCode,
+  isReferralEligible,
   isRewardRetryable,
 } from "./reward-utils.server";
 import type {
@@ -267,7 +268,12 @@ export async function syncCustomerFromAdmin(
     );
   }
 
-  return upsertLoyaltyCustomer(shop, customerSnapshot(customer));
+  const snapshot = customerSnapshot(customer);
+  const loyaltyCustomer = await upsertLoyaltyCustomer(shop, snapshot);
+  return {
+    ...loyaltyCustomer,
+    shopifyLifetimeSpend: snapshot.amountSpent,
+  };
 }
 
 function rewardLabel(
@@ -452,6 +458,8 @@ async function issueReward(input: IssueRewardInput) {
       firstName: input.customer.firstName,
       code,
       expiresAt,
+      kind: input.kind,
+      applyUrl: `https://${input.shop}/discount/${encodeURIComponent(code)}?redirect=${encodeURIComponent("/?loyalty_reward=applied")}`,
       rewardLabel: rewardLabel(
         input.type,
         input.value,
@@ -578,6 +586,8 @@ export async function retryRewardEmail(shop: string, rewardId: string) {
     firstName: reward.customer.firstName,
     code: reward.discountCode,
     expiresAt: reward.expiresAt,
+    kind: reward.kind,
+    applyUrl: `https://${shop}/discount/${encodeURIComponent(reward.discountCode)}?redirect=${encodeURIComponent("/?loyalty_reward=applied")}`,
     rewardLabel: rewardLabel(
       reward.rewardType,
       reward.rewardValue,
@@ -606,77 +616,45 @@ export async function evaluateMilestones(
   customer: LoyaltyCustomer,
   suppliedSettings?: ProgramSettings,
 ) {
-  const settings = suppliedSettings ?? (await getOrCreateSettings(shop));
-  if (!settings.enabled || settings.threshold.lessThanOrEqualTo(0)) return [];
-
-  const calculatedMilestones = Math.min(
-    1000,
-    Math.floor(
-      new Prisma.Decimal(customer.lifetimeSpend)
-        .dividedBy(settings.threshold)
-        .toNumber(),
-    ),
-  );
-  const unlocked = settings.repeatRewards
-    ? calculatedMilestones
-    : Math.min(1, calculatedMilestones);
-  if (unlocked < 1) return [];
-
-  const existing = await prisma.reward.findMany({
-    where: { customerId: customer.id, kind: RewardKind.MILESTONE },
-    select: { milestone: true },
-  });
-  const issuedMilestones = new Set(existing.map((reward) => reward.milestone));
-  const rewards = [];
-
-  for (let milestone = 1; milestone <= unlocked; milestone += 1) {
-    if (issuedMilestones.has(milestone)) continue;
-    rewards.push(
-      await issueReward({
-        admin,
-        shop,
-        customer,
-        settings,
-        kind: RewardKind.MILESTONE,
-        milestone,
-        type: settings.rewardType,
-        value: settings.rewardValue,
-        dedupeKey: `${shop}:${customer.id}:milestone:${milestone}`,
-      }),
-    );
-  }
-
-  return rewards;
+  // The order-level promotion is now a native Shopify automatic discount.
+  // No post-purchase loyalty code must be generated for qualifying orders.
+  void admin;
+  void shop;
+  void customer;
+  void suppliedSettings;
+  return [];
 }
 
-async function qualifyReferral(
+export async function ensureReferralSignupRewards(
   admin: AdminGraphqlClient,
   shop: string,
   referred: LoyaltyCustomer,
-  settings: ProgramSettings,
+  providedSettings?: ProgramSettings,
 ) {
+  const settings = providedSettings ?? (await getOrCreateSettings(shop));
   if (!settings.referralEnabled) return;
 
   const referral = await prisma.referral.findUnique({
     where: { referredId: referred.id },
     include: { advocate: true },
   });
-  if (!referral || referral.status !== ReferralStatus.SIGNED_UP) return;
+  if (!referral) return;
 
-  const updated = await prisma.referral.updateMany({
-    where: { id: referral.id, status: ReferralStatus.SIGNED_UP },
-    data: { status: ReferralStatus.QUALIFIED, qualifiedAt: new Date() },
-  });
-  if (updated.count !== 1) return;
+  if (referral.status === ReferralStatus.SIGNED_UP) {
+    await prisma.referral.updateMany({
+      where: { id: referral.id, status: ReferralStatus.SIGNED_UP },
+      data: { status: ReferralStatus.QUALIFIED, qualifiedAt: new Date() },
+    });
+  }
 
-  await Promise.all([
+  const [advocateReward, friendReward] = await Promise.all([
     issueReward({
       admin,
       shop,
       customer: referral.advocate,
       settings,
       kind: RewardKind.REFERRER,
-      type: settings.referralRewardType,
+      type: settings.referralAdvocateRewardType,
       value: settings.referralAdvocateRewardValue,
       dedupeKey: `${shop}:referral:${referral.id}:advocate`,
     }),
@@ -686,11 +664,13 @@ async function qualifyReferral(
       customer: referred,
       settings,
       kind: RewardKind.REFERRED,
-      type: settings.referralRewardType,
+      type: settings.referralFriendRewardType,
       value: settings.referralFriendRewardValue,
       dedupeKey: `${shop}:referral:${referral.id}:friend`,
     }),
   ]);
+
+  return { advocateReward, friendReward };
 }
 
 export async function applyOrderSnapshot(
@@ -757,9 +737,10 @@ export async function applyOrderSnapshot(
     },
   });
 
-  await evaluateMilestones(admin, shop, refreshed, settings);
   if (eligible && eligibleSinceProgramStart) {
-    await qualifyReferral(admin, shop, refreshed, settings);
+    // Backward-compatible recovery for referrals registered before rewards
+    // were issued immediately at signup.
+    await ensureReferralSignupRewards(admin, shop, refreshed, settings);
   }
 
   return { ignored: false as const, customer: refreshed };
@@ -815,14 +796,29 @@ export async function syncRecentOrders(
 }
 
 export async function registerReferral(
+  admin: AdminGraphqlClient,
   shop: string,
   referred: LoyaltyCustomer,
   code: string,
+  shopifyLifetimeSpend: string,
 ) {
   const settings = await getOrCreateSettings(shop);
   if (!settings.referralEnabled)
     throw new Error("Le parrainage est désactivé.");
-  if (referred.referredById) return { created: false as const };
+  if (referred.referredById) {
+    const rewards = await ensureReferralSignupRewards(
+      admin,
+      shop,
+      referred,
+      settings,
+    );
+    return { created: false as const, ...rewards };
+  }
+  if (!isReferralEligible(shopifyLifetimeSpend)) {
+    throw new Error(
+      "Le parrainage doit être enregistré avant le premier achat.",
+    );
+  }
 
   const advocate = await prisma.loyaltyCustomer.findUnique({
     where: { shop_referralCode: { shop, referralCode: code.toUpperCase() } },
@@ -831,7 +827,7 @@ export async function registerReferral(
     throw new Error("Code de parrainage invalide.");
   }
 
-  return prisma.$transaction(async (transaction) => {
+  const registration = await prisma.$transaction(async (transaction) => {
     const existing = await transaction.referral.findUnique({
       where: { referredId: referred.id },
     });
@@ -846,4 +842,12 @@ export async function registerReferral(
     });
     return { created: true as const };
   });
+
+  const rewards = await ensureReferralSignupRewards(
+    admin,
+    shop,
+    referred,
+    settings,
+  );
+  return { ...registration, ...rewards };
 }

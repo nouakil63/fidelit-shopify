@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
 import {
+  ensureReferralSignupRewards,
   getOrCreateSettings,
   registerReferral,
   syncCustomerFromAdmin,
@@ -30,6 +32,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     popupButtonLabel: settings.popupButtonLabel,
     popupDelaySeconds: settings.popupDelaySeconds,
     referralEnabled: settings.referralEnabled,
+    referralFriendRewardType: settings.referralFriendRewardType,
+    referralFriendRewardValue: settings.referralFriendRewardValue.toString(),
   };
 
   if (!shopifyCustomerId) {
@@ -41,22 +45,48 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     session.shop,
     shopifyCustomerId,
   );
-  const spent = new Prisma.Decimal(customer.lifetimeSpend);
+  // This also upgrades referrals created by older versions of the app: the
+  // first authenticated loyalty request creates both signup rewards once.
+  await ensureReferralSignupRewards(admin, session.shop, customer, settings);
   const threshold = new Prisma.Decimal(settings.threshold);
-  const remainder = threshold.greaterThan(0) ? spent.modulo(threshold) : spent;
-  const toNextReward = threshold.greaterThan(0)
-    ? threshold.minus(remainder).toFixed(2)
-    : "0.00";
+  const rewards = await prisma.reward.findMany({
+    where: {
+      shop: session.shop,
+      customerId: customer.id,
+      discountCode: { not: null },
+      expiresAt: { gt: new Date() },
+      status: { in: ["ISSUED", "EMAILED"] },
+    },
+    select: {
+      id: true,
+      discountCode: true,
+      kind: true,
+      rewardType: true,
+      rewardValue: true,
+      currencyCode: true,
+      expiresAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   return Response.json({
     authenticated: true,
     ...storefrontSettings,
     customer: {
       firstName: customer.firstName,
-      lifetimeSpend: spent.toFixed(2),
+      lifetimeSpend: new Prisma.Decimal(customer.lifetimeSpend).toFixed(2),
       currencyCode: customer.currencyCode,
       referralCode: customer.referralCode,
-      toNextReward,
+      orderThreshold: threshold.toFixed(2),
+      rewards: rewards.map((reward) => ({
+        id: reward.id,
+        code: reward.discountCode,
+        kind: reward.kind,
+        type: reward.rewardType,
+        value: reward.rewardValue.toString(),
+        currencyCode: reward.currencyCode,
+        expiresAt: reward.expiresAt?.toISOString() ?? null,
+      })),
     },
   });
 };
@@ -84,8 +114,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   );
 
   try {
-    const result = await registerReferral(session.shop, customer, code);
-    return Response.json({ ok: true, created: result.created });
+    const result = await registerReferral(
+      admin,
+      session.shop,
+      customer,
+      code,
+      customer.shopifyLifetimeSpend,
+    );
+    return Response.json({
+      ok: true,
+      created: result.created,
+      rewardReady: Boolean(result.friendReward?.discountCode),
+    });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : String(error) },

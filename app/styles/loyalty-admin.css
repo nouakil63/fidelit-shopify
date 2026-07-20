@@ -114,6 +114,12 @@
   color: #8e2d28;
 }
 
+.loyalty-notice.is-warning {
+  background: #fff8e5;
+  border: 1px solid #ead39a;
+  color: #6f5211;
+}
+
 .loyalty-metrics {
   display: grid;
   gap: 12px;

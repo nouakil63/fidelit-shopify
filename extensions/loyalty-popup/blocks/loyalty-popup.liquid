@@ -18,23 +18,39 @@
       <button class="loyalty-close" type="button" data-loyalty-close aria-label="Fermer">×</button>
       <p class="loyalty-kicker">Programme fidélité</p>
       <h2 id="loyalty-title-{{ block.id }}" data-loyalty-title>Votre fidélité récompensée</h2>
-      <p data-loyalty-text>Créez votre compte pour cumuler vos achats et débloquer vos récompenses.</p>
+      <p data-loyalty-text>Créez votre compte et profitez de récompenses sur vos commandes éligibles.</p>
 
       <div data-loyalty-guest>
         <a class="loyalty-primary" data-loyalty-account href="{{ routes.account_register_url }}">Créer mon compte</a>
       </div>
 
+      <div class="loyalty-invite" data-loyalty-invite hidden>
+        <div class="loyalty-invite-icon" aria-hidden="true">✦</div>
+        <p data-loyalty-invite-text></p>
+        <a class="loyalty-primary" data-loyalty-invite-account href="{{ routes.account_register_url }}">
+          Créer mon compte et profiter de l’offre
+        </a>
+      </div>
+
       <div data-loyalty-member hidden>
         <div class="loyalty-balance">
-          <span>Achats cumulés</span>
+          <span>Commande minimum</span>
           <strong data-loyalty-spend>—</strong>
         </div>
-        <p><strong data-loyalty-next>—</strong> avant la prochaine récompense.</p>
+        <p>Chaque commande atteignant ce montant débloque une récompense.</p>
+        <div class="loyalty-rewards" data-loyalty-rewards hidden>
+          <p class="loyalty-section-label">Vos récompenses disponibles</p>
+          <div data-loyalty-reward-list></div>
+        </div>
         <div data-loyalty-referral hidden>
           <p class="loyalty-referral-label">Votre lien de parrainage</p>
           <div class="loyalty-copy-row">
             <input data-loyalty-referral-link readonly aria-label="Lien de parrainage">
             <button type="button" data-loyalty-copy>Copier</button>
+          </div>
+          <div class="loyalty-share-row">
+            <a data-loyalty-whatsapp target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a data-loyalty-email>Envoyer par e-mail</a>
           </div>
         </div>
       </div>

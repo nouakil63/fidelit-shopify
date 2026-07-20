@@ -37,6 +37,9 @@
   justify-content: center;
   padding: 20px;
   position: fixed;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .loyalty-backdrop[hidden] { display: none; }
@@ -44,8 +47,13 @@
 .loyalty-dialog {
   background: #fff;
   border-radius: 18px;
+  box-sizing: border-box;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   max-width: 440px;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 34px;
   position: relative;
   width: 100%;
@@ -98,15 +106,123 @@
 }
 
 .loyalty-balance strong { color: var(--loyalty-accent); font-size: 22px; }
+.loyalty-section-label,
 .loyalty-referral-label { font-size: 13px; font-weight: 700; margin: 22px 0 7px; }
+.loyalty-reward-card {
+  background: #f7f4ed;
+  border: 1px solid #e8e0d1;
+  border-radius: 10px;
+  margin-top: 8px;
+  padding: 12px;
+}
+
+.loyalty-invite {
+  background: #f7f4ed;
+  border: 1px solid #e8e0d1;
+  border-radius: 12px;
+  margin-top: 18px;
+  padding: 18px;
+  text-align: center;
+}
+
+.loyalty-invite-icon {
+  align-items: center;
+  background: var(--loyalty-accent);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 22px;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.loyalty-invite p { margin: 12px 0 0; }
+.loyalty-invite .loyalty-primary { margin-top: 16px; }
+.loyalty-reward-card strong { display: block; margin-bottom: 7px; }
+.loyalty-reward-code-row { align-items: center; display: flex; gap: 8px; }
+.loyalty-reward-code {
+  background: #fff;
+  border: 1px dashed #aa9c82;
+  border-radius: 7px;
+  flex: 1;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  padding: 9px;
+  text-align: center;
+}
+.loyalty-reward-copy,
 .loyalty-copy-row { display: flex; gap: 8px; }
 .loyalty-copy-row input { border: 1px solid #bbb; border-radius: 8px; min-width: 0; padding: 10px; width: 100%; }
-.loyalty-copy-row button { background: #ecefec; border: 0; border-radius: 8px; cursor: pointer; font-weight: 700; padding: 8px 12px; }
+.loyalty-copy-row button,
+.loyalty-reward-copy { background: #ecefec; border: 0; border-radius: 8px; cursor: pointer; font-weight: 700; padding: 8px 12px; }
+.loyalty-reward-apply {
+  background: var(--loyalty-accent);
+  border-radius: 8px;
+  color: #fff;
+  display: block;
+  font-size: 14px;
+  font-weight: 750;
+  margin-top: 10px;
+  padding: 10px 12px;
+  text-align: center;
+  text-decoration: none;
+}
+.loyalty-reward-expiry { color: #68716b; display: block; font-size: 12px; margin-top: 7px; }
+.loyalty-share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.loyalty-share-row a {
+  border: 1px solid #d6ddd8;
+  border-radius: 8px;
+  color: var(--loyalty-text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+/* The theme can override the browser's native [hidden] rule. Keep referral
+   actions genuinely hidden once the customer is authenticated. */
+.loyalty-primary[hidden] { display: none; }
 .loyalty-status { color: #59635d; font-size: 13px; margin-bottom: 0; min-height: 1em; }
 
 @media (max-width: 520px) {
-  .loyalty-launcher { bottom: 14px; }
-  .loyalty-root--right .loyalty-launcher { right: 14px; }
-  .loyalty-root--left .loyalty-launcher { left: 14px; }
-  .loyalty-dialog { padding: 28px 22px; }
+  .loyalty-launcher {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    font-size: 14px;
+    padding: 11px 15px;
+  }
+  .loyalty-root--right .loyalty-launcher { right: max(12px, env(safe-area-inset-right)); }
+  .loyalty-root--left .loyalty-launcher { left: max(12px, env(safe-area-inset-left)); }
+  .loyalty-backdrop {
+    align-items: flex-end;
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .loyalty-dialog {
+    border-radius: 16px;
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    max-width: none;
+    padding: 26px 18px 22px;
+    width: 100%;
+  }
+  .loyalty-dialog h2 {
+    font-size: clamp(22px, 7vw, 27px);
+    overflow-wrap: anywhere;
+  }
+  .loyalty-balance { gap: 10px; padding: 14px; }
+  .loyalty-balance strong { font-size: 19px; white-space: nowrap; }
+  .loyalty-reward-code-row { align-items: stretch; flex-direction: column; }
+  .loyalty-reward-code { overflow-wrap: anywhere; }
+  .loyalty-reward-copy { justify-content: center; width: 100%; }
+  .loyalty-copy-row { flex-direction: column; }
+  .loyalty-copy-row button { min-height: 42px; }
+  .loyalty-share-row { flex-direction: column; }
+  .loyalty-share-row a { text-align: center; }
+}
+
+@media (max-height: 620px) {
+  .loyalty-backdrop { align-items: flex-start; }
+  .loyalty-dialog { margin: auto 0; }
 }

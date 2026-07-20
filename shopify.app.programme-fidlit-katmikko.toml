@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "23258548aa1bc75fc8d3460809413e42"
-application_url = "https://katmikko-fidelite.netlify.app"
+application_url = "https://remise-auto--katmikko-fidelite.netlify.app"
 embedded = true
 name = "Programme Fidélité Katmikko"
 
@@ -47,7 +47,7 @@ prefix = "apps"
 subpath = "fidelite"
 
 [auth]
-redirect_urls = ["https://katmikko-fidelite.netlify.app/auth/callback"]
+redirect_urls = ["https://remise-auto--katmikko-fidelite.netlify.app/auth/callback"]
 
 [build]
 automatically_update_urls_on_dev = true
